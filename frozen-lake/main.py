@@ -122,6 +122,7 @@ def run_simulation(env,policy=None,human=False):
         score += r
         steps += 1
         print(f'current score: {score}')
+    env.render()
     print(f'Done in {steps} steps')
     env.close()
 
