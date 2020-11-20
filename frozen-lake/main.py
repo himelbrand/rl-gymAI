@@ -86,26 +86,33 @@ def evaluate(env,pi,gamma):
     v = np.zeros(len(pi))
     goal_reached = 0
     for episode in range(15):
-        s_init = 0#env.observation_space.sample()# if episode < 14 else 0
+        while True:
+            s_init = env.observation_space.sample()#0## if episode < 14 else 0
+            if s_init not in {15,5,7,11,12}:
+                break
         s = env.reset(s_init)
         done = False
         steps = 0
         sample = []
+        # print(f"{'='*25}episode {episode}{'='*25}")
         while(not done):
+            # env.render()
             a = np.argmax(pi[s])
             s_tag, r, done, _ = env.step(a)
             sample.append((s,a,r))
             goal_reached += int(r>0)
             s = s_tag
             steps += 1
+        # env.render()
         for t in range(len(sample)):
             s,a,r = sample[t]
             Gt = r
             for t_tag in range(t+1,len(sample)):
                 e = t_tag - t
-                s_tag,a_tag,r_tag = sample[t]
+                s_tag,a_tag,r_tag = sample[t_tag]
                 discount = gamma**e
                 Gt += r_tag*discount
+            print(f'state={s} with Gt={Gt}')
             v[s] += Gt
     v = v/15
     print(f'reached goal {goal_reached}/15')
@@ -120,7 +127,7 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps=0.05,max_step=5000,epis
     while steps < max_step:
         episodes += 1
         E = np.zeros(Q.shape)
-        s = 0#env.observation_space.sample()
+        s = env.observation_space.sample()
         a = np.random.choice(actions,p=pi[s])
         env.reset(s)
         # print('running new episode')
@@ -144,6 +151,10 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps=0.05,max_step=5000,epis
             s, a = s_tag, a_tag
             steps += 1
             if done or steps >= max_step: break
+        pi_converged = eps_greedy(eps,pi,Q,states,actions)
+        # if reward ==1:
+        #     print('Q:')
+        #     print(Q)
     print(f'reached goal {goal_reached} in SARSA')
     return steps,not_converged,(pi == og_pi).all(),episodes
             
@@ -162,7 +173,7 @@ def eps_greedy(eps,pi,q,states,actions):
 
 def learn_policy(env,actions,states,gamma,Lambda,alpha,epsilon):
     #init Q
-    Q = np.ones((len(states),len(actions)))#np.random.rand(len(states),len(actions))
+    Q = np.zeros((len(states),len(actions)))#np.random.rand(len(states),len(actions))
     #init pi
     pi = np.ones((len(states),len(actions)))
     pi /= len(actions) 
@@ -171,7 +182,8 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha,epsilon):
     total_steps = 0
     v_prev = None
     iters = 0
-    while True:#for _ in range(15):
+    episodes = 1
+    for _ in range(50):
         iters += 1
         epsilon = 1/iters
         steps,Q_not_converged,pi_converged,episodes = sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,epsilon,max_step=2500,episode_max_steps=250)
@@ -240,11 +252,21 @@ def run_simulation(env,policy=None,human=False):
 
 def main(gamma=0.95,epsilon=0.01):
     env = init_env()
+    # env.reset()
+    # env.render()
+    # return
+    # for s in env.P:
+    #     print('='*50)
+    #     for a in env.P[s]:
+    #         print(f'state:{s}, action:{a}')
+    #         print(env.P[s][a])
+    #     print('='*50)
+    # return
     tmp_env = modify_env(env)
     nA = env.action_space.n
     nS = env.observation_space.n
-    for Lambda in [0.8]:
-        for alpha in [0.1]:
+    for Lambda in [0.95]:
+        for alpha in [0.05]:
             pi = learn_policy(tmp_env,range(nA),range(nS),gamma,Lambda,alpha,epsilon)
             run_simulation(env,policy=pi)#running human agent
 
