@@ -260,12 +260,12 @@ if __name__ == "__main__":
     import argparse
     def parse_args():
         global MAP
-        parser = argparse.ArgumentParser(prog='hw1.py',description='AI agent using policy iteration for AI-Gym Taxi.')
+        parser = argparse.ArgumentParser(prog='hw1.py',description='AI agent using SARSA lambda for AI-Gym Frozen lake.')
         parser.add_argument('-human',dest='human', action='store_true',help='use this flag to run human agent')
         parser.add_argument('-gamma',dest='gamma', metavar='G',default=0.95, type=float, help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d',dest='debug', action='store_true',help='use this flag to get debug prints')
         parser.add_argument('-4x4',dest='map', action='store_true',help='use this flag to use 4x4 map')
-        parser.add_argument('-p',dest='prior', action='store_true',help='use this flag to invalidate some actions from specific states and keeping all goal states with value of 0. (reduce the number of iterations needed to converge)')
+        parser.add_argument('-p',dest='prior', action='store_true',help='use this flag to use information regarding terminating states')
         parser.add_argument('-save',dest='save', action='store_true',help='use this flag to save pi to file')
         parser.add_argument('-load',dest='load',metavar='FILE',help='use this flag to load pi from file',default=None)
         args = parser.parse_args()
