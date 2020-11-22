@@ -138,12 +138,13 @@ def check_Q_convergence(Q,og_Q,actions):
             return False
     return True
 
-def get_maxsteps(curr):
-    if curr < 20000:
-        return 1000
-    if curr < 60000:
-        return 2000
-    return 3000
+def get_maxsteps(curr):#maybe try and change number of steps between evaluations
+    return 2500
+    # if curr < 20000:
+    #     return 1000
+    # if curr < 60000:
+    #     return 2000
+    # return 3000
    
 
 def learn_policy(env,actions,states,gamma,Lambda,alpha):
@@ -161,7 +162,7 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha):
     last_iter = False
     while True:
         iters += 1
-        epsilon = 1/iters
+        epsilon = 1/iters #maybe should be different epsilon
         if not last_iter:
             og_pi = pi.copy()
             og_Q = Q.copy()
@@ -172,8 +173,8 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha):
         x.append(total_steps)
         y.append(v[0])
         z.append(v.mean())
-        if check_Q_convergence(Q,og_Q,actions) and check_pi_convergence(pi,og_pi):
-            if last_iter:
+        if check_Q_convergence(Q,og_Q,actions) and check_pi_convergence(pi,og_pi):#checking that ordering stayed the same
+            if last_iter:#giving another chance before deciding we got converged
                 break
             last_iter = True
         else:
