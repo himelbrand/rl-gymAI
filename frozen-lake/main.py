@@ -45,18 +45,18 @@ def modify_env(env):
 def draw_initial_state(env):
     while True:
         s_init = env.observation_space.sample()
-        if PRIOR and s_init not in terminating_states[MAP]:
-            break
-        elif not PRIOR:
+        if s_init not in terminating_states[MAP]:
             break
     return s_init
 
-def evaluate(env,pi,gamma,episodes_num=100):
+def evaluate(env,pi,gamma,episodes_num=1000):
     if DEBUG:
         print('Running policy evaluation')
     v = np.zeros(env.observation_space.n)
     goal_reached = 0
+    
     for _ in range(episodes_num):
+        visited = []
         s = env.reset(0)
         done = False
         steps = 0
@@ -71,6 +71,9 @@ def evaluate(env,pi,gamma,episodes_num=100):
         for t in range(len(sample)):
             s,a,r = sample[t]
             Gt = r
+            if s in visited:
+                continue
+            visited.append(s)
             for t_tag in range(t+1,len(sample)):
                 e = t_tag - t
                 s_tag,_,r_tag = sample[t_tag]
@@ -92,7 +95,7 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,max_step=5000,episode_m
     while steps < max_step:
         E = np.zeros(Q.shape)
         episodes += 1
-        s = 0
+        s = draw_initial_state(env)
         a = np.random.choice(actions,p=pi[s])
         env.reset(s)
         for _ in range(episode_max_steps):
