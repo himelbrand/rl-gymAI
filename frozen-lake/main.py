@@ -61,16 +61,13 @@ def evaluate(env,pi,gamma,episodes_num=100):
         done = False
         steps = 0
         sample = []
-        counts = defaultdict(int)
         while(not done):
             a = np.argmax(pi[s])
-            counts[int(s)] += 1
             s_tag, r, done, _ = env.step(a)
             sample.append((s,a,r))
             goal_reached += int(r>0)
             s = s_tag
-            steps += 1
-            
+            steps += 1    
         for t in range(len(sample)):
             s,a,r = sample[t]
             Gt = r
@@ -80,8 +77,6 @@ def evaluate(env,pi,gamma,episodes_num=100):
                 discount = gamma**e
                 Gt += r_tag*discount
             v[s] += Gt
-        for s in counts:
-            v[s] /= counts[s]
     v = v/episodes_num
     if DEBUG:
         print(f'Reached goal in {goal_reached}/{episodes_num} episodes')
@@ -144,11 +139,12 @@ def check_Q_convergence(Q,og_Q,actions):
     return True
 
 def get_maxsteps(curr):
-    if curr < 250000:
-        return 2500
-    if curr < 500000:
-        return 5000
     return 10000
+    # if curr < 250000:
+    #     return 2500
+    # if curr < 500000:
+    #     return 5000
+    # return 10000
    
 
 def learn_policy(env,actions,states,gamma,Lambda,alpha):
@@ -224,7 +220,7 @@ def main(gamma=0.95,human=False):
     nA = env.action_space.n
     nS = env.observation_space.n
     for Lambda in [0.9,0.7]:
-        for alpha in [0.1,0.05]:
+        for alpha in [0.05]:
             print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
             label = f'$\\alpha={alpha},\\lambda={Lambda}$'
             xy,pi = learn_policy(tmp_env,range(nA),range(nS),gamma,Lambda,alpha)
