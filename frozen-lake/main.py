@@ -225,13 +225,12 @@ def main(gamma=0.95,human=False):
     nS = env.observation_space.n
     for Lambda in [0.9,0.7]:
         for alpha in [0.1,0.05]:
-            if DEBUG:
-                print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
+            print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
             label = f'$\\alpha={alpha},\\lambda={Lambda}$'
             xy,pi = learn_policy(tmp_env,range(nA),range(nS),gamma,Lambda,alpha)
             values[label] = xy
-            print(f'Running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
             run_simulation(env,policy=pi)
+            print(f'Done running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
     plt.figure(figsize=(20,10))
     plt.title(r'Learning of policy - $V_{init}$ vs. steps')
     plt.xlabel('Total steps')
