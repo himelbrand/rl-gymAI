@@ -54,14 +54,15 @@ def evaluate(env,pi,gamma,episodes_num=1000):
         print('Running policy evaluation')
     v = np.zeros(env.observation_space.n)
     goal_reached = 0
-    
+    seen = 0
     for _ in range(episodes_num):
-        visited = []
         s = env.reset(0)
         done = False
         steps = 0
         sample = []
         while(not done):
+            if s == 0:
+                seen += 1
             a = np.argmax(pi[s])
             s_tag, r, done, _ = env.step(a)
             sample.append((s,a,r))
@@ -71,19 +72,16 @@ def evaluate(env,pi,gamma,episodes_num=1000):
         for t in range(len(sample)):
             s,a,r = sample[t]
             Gt = r
-            if s in visited:
-                continue
-            visited.append(s)
             for t_tag in range(t+1,len(sample)):
                 e = t_tag - t
                 s_tag,_,r_tag = sample[t_tag]
                 discount = gamma**e
                 Gt += r_tag*discount
             v[s] += Gt
-    v = v/episodes_num
+    v0 = v[0]/seen
     if DEBUG:
         print(f'Reached goal in {goal_reached}/{episodes_num} episodes')
-    return v
+    return v0
     
 def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,max_step=5000,episode_max_steps=250,iters=0):
     steps = 0
@@ -169,7 +167,7 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha):
         total_episodes += episodes
         total_steps += steps
         x.append(total_steps)
-        y.append(v[0])  
+        y.append(v)  
         if DEBUG:
             print(f'current step count is: {total_steps} with epsilon={epsilon}')      
     return {'x':x,'y':y},pi
