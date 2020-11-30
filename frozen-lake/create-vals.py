@@ -1,14 +1,28 @@
 import numpy as np
 import pprint
 from main import plot_results
-files = [('0.01-0.7-x.npy','0.01-0.7-y.npy'),('0.01-0.9-x.npy','0.01-0.9-y.npy'),('0.02-0.7-x.npy','0.02-0.7-y.npy'),('0.02-0.9-x.npy','0.02-0.9-y.npy')]
+#use output files of values and steps to re-plot all plots
+files = [
+    ('0.01-0.5-x.npy','0.01-0.5-y.npy'),
+    ('0.01-0.7-x.npy','0.01-0.7-y.npy'),
+    ('0.01-0.9-x.npy','0.01-0.9-y.npy'),
+    ('0.02-0.5-x.npy','0.02-0.5-y.npy'),
+    ('0.02-0.7-x.npy','0.02-0.7-y.npy'),
+    ('0.02-0.9-x.npy','0.02-0.9-y.npy'),
+    ('0.03-0.5-x.npy','0.03-0.5-y.npy'),
+    ('0.03-0.7-x.npy','0.03-0.7-y.npy'),
+    ('0.03-0.9-x.npy','0.03-0.9-y.npy')
+    ]
 values = {}
 for fn in files:
     fx,fy = fn
-    with open(fx,'rb') as f:
-        x = np.load(f)
-    with open(fy,'rb') as f:
-        y = np.load(f)
+    try:
+        with open(fx,'rb') as f:
+            x = np.load(f)
+        with open(fy,'rb') as f:
+            y = np.load(f)
+    except:
+        print(f'Failed to open one of: {fx}, {fy} !!!')
     values[fx[:-6]] = ({'x':x,'y':y},float(fx.split('-')[0]),float(fx.split('-')[1]))
 
 plot_results(values)

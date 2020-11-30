@@ -1,7 +1,10 @@
 import numpy as np
 import pprint
 from main import evaluate,init_env,MAP,modify_env,set_debug
+
 set_debug(True)
+
+#can't fall in holes policy
 pi = np.array([[0., 0., 0., 1.],
        [0., 0., 0., 1.],
        [0., 0., 0., 1.],

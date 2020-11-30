@@ -1,6 +1,9 @@
 import gym
 import numpy as np
 import pprint
+
+#this file is for manual debugging of map, to find "good" policies manually
+
 env =  gym.make('FrozenLake8x8-v0')
 holes = [59,54,52,49,46,42,41,35,29,19]
 states = range(64)

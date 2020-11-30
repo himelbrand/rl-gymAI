@@ -6,16 +6,11 @@ from datetime import datetime
 from collections import defaultdict
 from itertools import product  
 DEBUG = False
-PRIOR = False
 MAX_STEPS = 1000
 MAP = '8x8'
 png_suffix = ''
 check_states = []
 terminating_states = {'4x4':[15,5,7,11,12],'8x8':[63,59,54,52,49,46,42,41,35,29,19]}
-
-def set_prior(value):
-    global PRIOR
-    PRIOR = value
 
 def set_debug(value):
     global DEBUG
@@ -52,13 +47,6 @@ def modify_env(env):
     env.orig_reset =  env.reset
     env.reset = new_reset
     return env
-
-def draw_initial_state(env):
-    while True:
-        s_init = env.observation_space.sample()
-        if not PRIOR or s_init not in terminating_states[MAP]:
-            break
-    return s_init
 
 def evaluate(env,pi,gamma,episodes_num=500):
     if DEBUG:
@@ -264,7 +252,9 @@ def main(gamma=0.95,human=False):
             values[label] = (xy,alpha,Lambda)
             run_simulation(env,policy=pi)
             print(f'Done running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
+    print('Creating tons of plots to pick the most informative from...')
     plot_results(values)
+    print('All possible plots can be now found in out directory!')
 
 if __name__ == "__main__":
     import argparse
@@ -277,12 +267,10 @@ if __name__ == "__main__":
         parser.add_argument('-ms',dest='max_steps', metavar='MAX_STEPS',default=1000, type=int, help='a int for number of steps between evaluations.')
         parser.add_argument('-png',dest='png', metavar='PNG_SUFFIX',default='', help='a suffix for png out file')
         parser.add_argument('-4x4',dest='map', action='store_true',help='use this flag to use 4x4 map')
-        parser.add_argument('-p',dest='prior', action='store_true',help='use this flag to use information regarding terminating states')
         args = parser.parse_args()
         if args.gamma > 1 or args.gamma < 0:
             raise argparse.ArgumentTypeError(f'{args.gamma} must be in the interval [0,1].')
         set_debug(args.debug)
-        set_prior(args.prior)
         set_max_steps(args.max_steps)
         set_png_suffix(args.png)
         use_small_map(args.map)
