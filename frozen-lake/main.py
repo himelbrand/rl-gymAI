@@ -81,7 +81,7 @@ def evaluate(env,pi,gamma,episodes_num=500):
         print(f'Reached goal in {goal_reached}/{episodes_num} episodes, got V(0)={v0}')
     return v0
     
-def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,episode_max_steps=250,iters=0,last_rr=0):
+def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,episode_max_steps=250,iters=0):
     steps = 0
     if DEBUG:
         print(f'Running iteration {iters} of SARSA')
@@ -150,10 +150,9 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha):
     total_episodes = 0
     iters = 0
     epsilon = 1
-    rr = 0
     while total_steps < 1e6:
         iters += 1
-        steps,episodes,epsilon = sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,epsilon,E,max_step=MAX_STEPS,episode_max_steps=250,iters=iters,last_rr=rr)
+        steps,episodes,epsilon = sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,epsilon,E,max_step=MAX_STEPS,episode_max_steps=250,iters=iters)
         v = evaluate(env,pi,gamma)
         total_episodes += episodes
         total_steps += steps
