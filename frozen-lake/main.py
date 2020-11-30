@@ -81,7 +81,7 @@ def plot_results(values):
     lambdas = powerset([0.9,0.7,0.5])
     alphas = powerset([0.03,0.02,0.01])
 
-    for s,l,a in product(sizes,lambdas,alphas):
+    for j,(s,l,a) in enumerate(product(sizes,lambdas,alphas)):
         plt.figure(figsize=(20,10))
         plt.title(r'Learning of policy - $V^{\pi}_{init}$ by steps')
         plt.xlabel('Total steps')
@@ -93,7 +93,7 @@ def plot_results(values):
                 x = [step for step in x if step % s[step//200001] == 0]
                 plt.plot(x,y,label=label)
                 plt.legend()
-                plt.savefig(f'out/plot{MAP}({datetime.strftime(datetime.now(),"%d-%m_%H:%M")})_{min(s)}-{max(s)}{png_suffix}.png')
+                plt.savefig(f'out/plot{MAP}({datetime.strftime(datetime.now(),"%d-%m_%H:%M")})_{min(s)}-{max(s)}{png_suffix}_{j}.png')
 
 def human_agent(env):
     a = -1
