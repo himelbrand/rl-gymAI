@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import pprint
 from datetime import datetime
 from collections import defaultdict
+from itertools import product  
 DEBUG = False
 PRIOR = False
-CHANGING_STEPS = False
-MAX_STEPS = 10000
+MAX_STEPS = 1000
 MAP = '8x8'
 png_suffix = ''
 check_states = []
@@ -28,10 +28,6 @@ def set_png_suffix(value):
 def set_max_steps(value):
     global MAX_STEPS
     MAX_STEPS = value
-
-def set_changing_steps(value):
-    global CHANGING_STEPS
-    CHANGING_STEPS = value
 
 def use_small_map(value):
     global MAP
@@ -83,7 +79,7 @@ def evaluate(env,pi,gamma,episodes_num=500):
             sample.append((s,a,r))
             goal_reached += int(r>0)
             s = s_tag
-            steps += 1    
+            steps += 1  
         for t in range(len(sample)):
             s,a,r = sample[t]
             Gt = r
@@ -95,20 +91,20 @@ def evaluate(env,pi,gamma,episodes_num=500):
             v[s] += Gt
     v0 = v[0]/seen
     if DEBUG:
-        print(f'Reached goal in {goal_reached}/{episodes_num} episodes')
+        print(f'Reached goal in {goal_reached}/{episodes_num} episodes, got V(0)={v0}')
     return v0
     
-def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,max_step=5000,episode_max_steps=250,iters=0):
+def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,episode_max_steps=250,iters=0,last_rr=0):
     steps = 0
     if DEBUG:
         print(f'Running iteration {iters} of SARSA')
     goal_reached = 0
     episodes = 0
-    epsilon_decay = 0.9999
+    epsilon_decay = 0.99999
     while steps < max_step:
         E = np.zeros(Q.shape)
         episodes += 1
-        s = draw_initial_state(env)
+        s = 0
         a = np.random.choice(actions,p=pi[s])
         env.reset(s)
         for _ in range(episode_max_steps):
@@ -118,6 +114,7 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,max_step=5000,episode_m
             a_tag = np.random.choice(actions,p=pi[s_tag])
             delta = reward + gamma*Q[s_tag][a_tag] - Q[s][a]
             E[s][a] += 1
+            explored[s][a] += 1
             for s in states:
                 for a in actions:
                     Q[s][a] += alpha*delta*E[s][a]
@@ -125,7 +122,9 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,max_step=5000,episode_m
             s, a = s_tag, a_tag
             steps += 1
             if done or steps >= max_step: break
-        eps *= epsilon_decay
+        if reward:
+            eps *= 0.99
+        eps = max(0.01,eps*epsilon_decay)
     if DEBUG:
         print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')
     return steps,episodes,eps
@@ -139,20 +138,22 @@ def eps_greedy(eps,pi,q,states,actions):
         for a in actions: 
             pi[s][a] = uni + ((1-eps) if a == a_star else 0)
 
-def get_maxsteps(curr):
-    if CHANGING_STEPS:
-        if curr < 250000:
-            return MAX_STEPS
-        if curr < 750000:
-            return MAX_STEPS//2
-        return MAX_STEPS//3
-    else:
-        return MAX_STEPS
-   
+def save_v(x,y,alpha,Lambda):
+    try:
+        with open(f'{alpha}-{Lambda}-x.npy','wb') as f:
+            np.save(f,np.array(x))
+        with open(f'{alpha}-{Lambda}-y.npy','wb') as f:
+            np.save(f,np.array(y))
+    except:
+        print('failed to save V to files')
 
 def learn_policy(env,actions,states,gamma,Lambda,alpha):
+    #E is for debugging of exploration
+    E = np.zeros((len(states),len(actions)))
+    E[terminating_states[MAP]] = 1
     #init Q
-    Q = np.zeros((len(states),len(actions)))
+    Q = np.ones((len(states),len(actions)))
+    Q[terminating_states[MAP]] = 0
     #init pi
     pi = np.ones((len(states),len(actions)))
     pi /= len(actions) 
@@ -162,16 +163,23 @@ def learn_policy(env,actions,states,gamma,Lambda,alpha):
     total_episodes = 0
     iters = 0
     epsilon = 1
+    rr = 0
     while total_steps < 1e6:
         iters += 1
-        steps,episodes,epsilon = sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,epsilon,max_step=get_maxsteps(total_steps),episode_max_steps=250,iters=iters)
+        steps,episodes,epsilon = sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,epsilon,E,max_step=MAX_STEPS,episode_max_steps=250,iters=iters,last_rr=rr)
         v = evaluate(env,pi,gamma)
         total_episodes += episodes
         total_steps += steps
         x.append(total_steps)
         y.append(v)  
         if DEBUG:
-            print(f'current step count is: {total_steps} with epsilon={epsilon}')      
+            print(f'current step count is: {total_steps} with epsilon={epsilon}')    
+            if iters%100 == 0:
+                for s in states:
+                    print(f'Q({s}) -> argmax({np.argmax(Q[s])}),max({np.max(Q[s])})')
+                    tmp = [str(x) for x in np.where(E[s]==0)[0]]
+                    print(f'Still need exploring: {", ".join(tmp)}' if len(tmp) else '')
+    save_v(x,y,alpha,Lambda)
     return {'x':x,'y':y},pi
 
 def human_agent(env):
@@ -212,6 +220,32 @@ def run_simulation(env,policy=None,human=False):
     print(f'Done in {steps} steps')
     env.close()
 
+def plot_results(values):
+    def powerset(s):
+        res = []
+        x = len(s)
+        for i in range(1 << x):
+            res.append([s[j] for j in range(x) if (i & (1 << j))])
+        return res
+
+    sizes = [[1000]*5,[2000]*5,[4000]*5,[5000]*5,[8000]*5,[10000]*5,[2000,4000,5000,8000,10000],[1000,2000,4000,5000,8000],[1000,2000,3000,4000,5000],[1000,2500,5000,7500,10000]]
+    lambdas = powerset([0.9,0.7,0.5])
+    alphas = powerset([0.03,0.02,0.01])
+
+    for s,l,a in product(sizes,lambdas,alphas):
+        plt.figure(figsize=(20,10))
+        plt.title(r'Learning of policy - $V^{\pi}_{init}$ by steps')
+        plt.xlabel('Total steps')
+        plt.ylabel(r'$V^{\pi}_{init}$',rotation=90)
+        for label in values:
+            x,y,alpha,Lambda = values[label][0]['x'],values[label][0]['y'],values[label][1],values[label][2]
+            if alpha in a and Lambda in l:
+                y = [v for i,v in enumerate(y) if x[i] % s[x[i]//200001] == 0]
+                x = [step for step in x if step % s[step//200001] == 0]
+                plt.plot(x,y,label=label)
+                plt.legend()
+                plt.savefig(f'out/plot{MAP}({datetime.strftime(datetime.now(),"%d-%m_%H:%M")})_{min(s)}-{max(s)}{png_suffix}.png')
+
 def main(gamma=0.95,human=False):
     print(f'Using {MAP} map')
     values = {}
@@ -223,22 +257,15 @@ def main(gamma=0.95,human=False):
     nA = env.action_space.n
     nS = env.observation_space.n
     for Lambda in [0.9,0.7,0.5]:
-        for alpha in [0.1,0.05]:
+        for alpha in [0.03,0.02,0.01]:
             print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
             label = f'$\\alpha={alpha},\\lambda={Lambda}$'
             xy,pi = learn_policy(tmp_env,range(nA),range(nS),gamma,Lambda,alpha)
-            values[label] = xy
+            values[label] = (xy,alpha,Lambda)
             run_simulation(env,policy=pi)
             print(f'Done running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
-    plt.figure(figsize=(20,10))
-    plt.title(r'Learning of policy - $V^{\\pi}_{init}$ by steps')
-    plt.xlabel('Total steps')
-    plt.ylabel(r'$V^{\\pi}_{init}$',rotation=90)
-    for label in values:
-        x,y = values[label]['x'],values[label]['y']
-        plt.plot(x,y,label=label)
-    plt.legend()
-    plt.savefig(f'out/plot{MAP}({datetime.strftime(datetime.now(),"%d-%m_%H:%M")}){png_suffix}.png')
+    plot_results(values)
+
 if __name__ == "__main__":
     import argparse
     def parse_args():
@@ -247,8 +274,7 @@ if __name__ == "__main__":
         parser.add_argument('-human',dest='human', action='store_true',help='use this flag to run human agent')
         parser.add_argument('-gamma',dest='gamma', metavar='G',default=0.95, type=float, help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d',dest='debug', action='store_true',help='use this flag to get debug prints')
-        parser.add_argument('-cs',dest='c_steps', action='store_true',help='use this flag to have changing step counts between evaluations')
-        parser.add_argument('-ms',dest='max_steps', metavar='MAX_STEPS',default=10000, type=int, help='a int for number of steps between evaluations.')
+        parser.add_argument('-ms',dest='max_steps', metavar='MAX_STEPS',default=1000, type=int, help='a int for number of steps between evaluations.')
         parser.add_argument('-png',dest='png', metavar='PNG_SUFFIX',default='', help='a suffix for png out file')
         parser.add_argument('-4x4',dest='map', action='store_true',help='use this flag to use 4x4 map')
         parser.add_argument('-p',dest='prior', action='store_true',help='use this flag to use information regarding terminating states')
@@ -257,7 +283,6 @@ if __name__ == "__main__":
             raise argparse.ArgumentTypeError(f'{args.gamma} must be in the interval [0,1].')
         set_debug(args.debug)
         set_prior(args.prior)
-        set_changing_steps(args.c_steps)
         set_max_steps(args.max_steps)
         set_png_suffix(args.png)
         use_small_map(args.map)
