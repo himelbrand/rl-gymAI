@@ -80,7 +80,6 @@ def plot_results(values):
         ]
     lambdas = powerset([0.9,0.7,0.5])
     alphas = powerset([0.03,0.02,0.01])
-
     for j,(s,l,a) in enumerate(product(sizes,lambdas,alphas)):
         plt.figure(figsize=(20,10))
         plt.title(r'Learning of policy - $V^{\pi}_{init}$ by steps')
@@ -94,7 +93,7 @@ def plot_results(values):
                 plt.plot(x,y,label=label)
                 plt.legend()
                 plt.savefig(f'out/plot{MAP}({datetime.strftime(datetime.now(),"%d-%m_%H:%M")})_{min(s)}-{max(s)}{png_suffix}_{j}.png')
-
+        plt.close()
 def human_agent(env):
     a = -1
     while True:
@@ -133,7 +132,7 @@ def run_simulation(env,policy=None,human=False):
     print(f'Done in {steps} steps')
     env.close()
 
-def evaluate(env,pi,gamma,episodes_num=1000):
+def evaluate(env,pi,gamma,episodes_num=750):
     if DEBUG:
         print('Running policy evaluation')
     v = np.zeros(env.observation_space.n)
@@ -176,7 +175,7 @@ def eps_greedy(eps,pi,q,states,actions):
         for a in actions: 
             pi[s][a] = uni + ((1-eps) if a == a_star else 0)
 
-def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,episode_max_steps=250,iters=0,epsilon_decay=0.99999,min_eps=0.04):
+def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,episode_max_steps=250,iters=0,epsilon_decay=0.99999,min_eps=0.1):
     steps = 0
     if DEBUG:
         print(f'Running iteration {iters} of SARSA')
@@ -203,6 +202,8 @@ def sarsa(env,Q,pi,gamma,Lambda,alpha,states,actions,eps,explored,max_step=5000,
             s, a = s_tag, a_tag
             steps += 1
             if done or steps >= max_step: break
+        if reward:
+            eps *= 0.9
         eps = max(min_eps,eps*epsilon_decay) 
     if DEBUG:
         print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')

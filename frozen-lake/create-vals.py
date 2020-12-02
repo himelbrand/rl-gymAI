@@ -23,6 +23,7 @@ for fn in files:
             y = np.load(f)
     except:
         print(f'Failed to open one of: {fx}, {fy} !!!')
-    values[fx[:-6]] = ({'x':x,'y':y},float(fx.split('-')[0]),float(fx.split('-')[1]))
+    a,l = fx[:-6].split('-')
+    values[f'$\\alpha=${a},$\\lambda=${l}'] = ({'x':x,'y':y},float(fx.split('-')[0]),float(fx.split('-')[1]))
 
 plot_results(values)
