@@ -1,6 +1,6 @@
 import numpy as np
 import pprint
-from main import evaluate,init_env,MAP,modify_env,set_debug
+from hw2 import evaluate,init_env,MAP,modify_env,set_debug
 
 set_debug(True)
 

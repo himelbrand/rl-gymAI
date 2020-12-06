@@ -1,6 +1,6 @@
 import numpy as np
 import pprint
-from main import plot_results
+from hw2 import plot_results
 #use output files of values and steps to re-plot all plots
 files = [
     ('0.01-0.5-x.npy','0.01-0.5-y.npy'),
