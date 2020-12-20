@@ -10,7 +10,7 @@ MAX_STEPS = 120000
 EVAL_STEPS = 1000
 RELAXED = False
 png_suffix = ''
-P_CENTERS = [(i)*0.18 for i in range(-4,4)]#[-0.72, -0.54, -0.36, -0.18, 0.0, 0.18, 0.36, 0.54] #[(i)*0.19 for i in range(-4,4)]
+P_CENTERS = [(i)*0.18 for i in range(-4,4)]
 V_CENTERS = [(i)*0.014 for i in range(-4,4)]
 P_I = 0.18
 V_I = 0.014
@@ -49,6 +49,25 @@ def init_env(max_steps=500):
     env._max_episode_steps = max_steps
     return env
 
+def init_covariance(sigma_p=0.04,sigma_v=0.0004):
+    global SIGMA_P,SIGMA_V,COV,INV_COV
+    SIGMA_P = sigma_p
+    SIGMA_V = sigma_v
+    COV = np.diag([SIGMA_P,SIGMA_V])
+    INV_COV = np.linalg.inv(COV)
+
+
+def init_intervals(Ip=0.18,Iv=0.014):
+    global P_I,V_I
+    P_I = Ip
+    V_I = Iv
+
+def init_centers(p_half=4,v_half=4):
+    global P_CENTERS,V_CENTERS,CENTER_PRODUCTS
+    P_CENTERS = [(i)*P_I for i in range(-p_half,p_half)]
+    V_CENTERS = [(i)*V_I for i in range(-v_half,v_half)]
+    CENTER_PRODUCTS = np.array(list(product(P_CENTERS,V_CENTERS)))
+
 def modify_env(env):
     def new_reset(state=None):
         env.orig_reset()  
@@ -63,11 +82,11 @@ def modify_env(env):
 def save_run(w,x,y,alpha,Lambda):
     t = 'relaxed-' if RELAXED else ''
     try:
-        with open(f'out/{t}{alpha}-{Lambda}-x.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-x.npy','wb') as f:
             np.save(f,np.array(x))
-        with open(f'out/{t}{alpha}-{Lambda}-y.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-y.npy','wb') as f:
             np.save(f,np.array(y))
-        with open(f'out/{t}{alpha}-{Lambda}-w.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-w.npy','wb') as f:
             np.save(f,w)
     except:
         print('failed to save V and pi to files')
@@ -254,10 +273,7 @@ def sarsa(env,w,gamma,Lambda,alpha,actions,eps,max_step=5000,iters=0,epsilon_dec
             E[a] += tiles(x_s)
             w[a] += alpha*delta*E[a]*theta_s
             E *= gamma*Lambda 
-            s, a = s_tag, a_tag
-            x_s = x_s_tag
-            theta_s = theta_s_tag
-            Qhat = Qhat_tag
+            s, a, x_s, theta_s, Qhat = s_tag, a_tag, x_s_tag, theta_s_tag, Qhat_tag
             steps += 1
             if steps >= max_step:
                 break
@@ -303,6 +319,9 @@ def learn_policy(env,actions,gamma,Lambda,alpha):
 def main(gamma=1,human=False):
     values = {}
     env = init_env(max_steps=500 if RELAXED else 200)
+    init_covariance()
+    init_intervals()
+    init_centers()
     if human:
         run_simulation(env,human=True)
         return
