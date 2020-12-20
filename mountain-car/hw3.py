@@ -244,9 +244,6 @@ def goal_test(s:np.ndarray):
     p,v = s
     return p >= 0.5 and v >= 0
 
-def state2key(s:np.ndarray):
-    return s.tobytes()
-
 def sarsa(env,w,gamma,Lambda,alpha,actions,eps,max_step=5000,iters=0,epsilon_decay=0.99,min_eps=0.1):
     steps = 0
     if DEBUG:
@@ -349,7 +346,7 @@ def main(gamma=1,human=False):
 if __name__ == "__main__":
     import argparse
     def parse_args():
-        parser = argparse.ArgumentParser(prog='hw2.py',description='AI agent using SARSA lambda for AI-Gym Frozen lake.')
+        parser = argparse.ArgumentParser(prog='hw3.py',description='AI agent using SARSA lambda and LFA for AI-Gym Mountain Car.')
         parser.add_argument('-human',dest='human', action='store_true',help='use this flag to run human agent')
         parser.add_argument('-gamma',dest='gamma', metavar='G',default=1.0, type=float, help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d',dest='debug', action='store_true',help='use this flag to get debug prints')
