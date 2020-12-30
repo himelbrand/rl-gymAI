@@ -64,7 +64,7 @@ def init_intervals(Ip=0.18,Iv=0.014):
 
 def init_centers(p_half=4,v_half=4):
     global P_CENTERS,V_CENTERS,CENTER_PRODUCTS
-    P_CENTERS = [(i)*P_I for i in range(-p_half,p_half)]
+    P_CENTERS = [(i+0.5)*P_I for i in range(-p_half,p_half)]
     V_CENTERS = [(i)*V_I for i in range(-v_half,v_half)]
     CENTER_PRODUCTS = np.array(list(product(P_CENTERS,V_CENTERS)))
 
@@ -82,11 +82,11 @@ def modify_env(env):
 def save_run(w,x,y,alpha,Lambda):
     t = 'relaxed-' if RELAXED else ''
     try:
-        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-x.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-x.npy','wb') as f:
             np.save(f,np.array(x))
-        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-y.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-y.npy','wb') as f:
             np.save(f,np.array(y))
-        with open(f'out/{MAX_STEPS}-{t}{alpha}-{Lambda}-w.npy','wb') as f:
+        with open(f'out/{MAX_STEPS}-{t}{alpha}-theta.npy','wb') as f:
             np.save(f,w)
     except:
         print('failed to save V and pi to files')
@@ -114,7 +114,7 @@ def plot_results(values):
         [5000,4000,3000,2000,1000]
         ]
     lambdas = powerset([0.5])
-    alphas = powerset([0.02])
+    alphas = powerset([0.01])
     t = '_relaxed' if RELAXED else ''
     part = int(MAX_STEPS/5)+1
     for (s,l,a) in product(sizes,lambdas,alphas):
@@ -129,7 +129,7 @@ def plot_results(values):
                 x = [step for step in x if step % s[step//part] == 0]
                 plt.plot(x,y,label=label)
                 plt.legend()
-                plt.savefig(f'out/plots/plot({datetime.strftime(datetime.now(),"%d-%m_%H:%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
+                plt.savefig(f'out/plots/plot({datetime.strftime(datetime.now(),"%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
         plt.close()
 def human_agent(env):
     from readchar import readkey
@@ -139,20 +139,20 @@ def human_agent(env):
     key = readkey()
     return mapping.get(key,1)
 
-def run_simulation(env,w=None,human=False,show=True):
+def run_simulation(env,theta=None,human=False,show=True):
     s = env.reset()
     actions = range(env.action_space.n)
     done = False
     score = 0
     steps = 0
-    if w is None and not human:
+    if theta is None and not human:
         print('No policy found - using human agent')
         human = True
     while(not done):
         if show:
             env.render()
-        Qhat = QApproximation(theta(centers_distance(s)),w)
-        a = human_agent(env) if human else apply_policy(Qhat,actions)
+        pi,_ = piApproximation(theta,s)
+        a = human_agent(env) if human else apply_policy(pi,actions)
         s, r, done, _ = env.step(a)
         score += r
         steps += 1
@@ -163,7 +163,7 @@ def run_simulation(env,w=None,human=False,show=True):
     env.close()
     return score
 
-def evaluate(env,w,gamma,episodes_num=100,show=False):
+def evaluate(env,theta,gamma,episodes_num=100,show=False):
     if DEBUG:
         print('Running policy evaluation')
     v0 = 0
@@ -172,10 +172,8 @@ def evaluate(env,w,gamma,episodes_num=100,show=False):
     seen = 0
     for i in range(episodes_num):
         s = env.reset()
-        x_s = centers_distance(s)
         s0 = s
-        theta_s = theta(x_s)
-        Qhat = QApproximation(theta_s,w)
+        pi,_ = piApproximation(theta,s)
         done = False
         steps = 0
         sample = []
@@ -184,15 +182,12 @@ def evaluate(env,w,gamma,episodes_num=100,show=False):
                 env.render()
             if np.all(s0==s):
                 seen += 1
-            a = apply_policy(Qhat,actions)
+            a = apply_policy(pi,actions)
             s_tag, r, done, _ = env.step(a)
-            x_s_tag = centers_distance(s_tag)
-            theta_s_tag = theta(x_s_tag)
-            Qhat_tag = QApproximation(theta_s_tag,w)
+            pi,_ = piApproximation(theta,s_tag)
             sample.append((s,a,r))
             goal_reached += int(goal_test(s_tag))
-            s = x_s_tag
-            Qhat = Qhat_tag
+            s = s_tag
             steps += 1  
         if i == 99 and show and DEBUG:
             env.render()
@@ -213,18 +208,25 @@ def evaluate(env,w,gamma,episodes_num=100,show=False):
         print(f'Reached goal in {goal_reached}/{episodes_num} episodes, got V(0)={v0}')
     return v0
 
-def apply_policy(Qhat,actions,eps=0):
+def apply_policy(pi:np.ndarray,actions,eps=0):
     flip = np.random.rand()
     if flip < eps:
         return np.random.choice(actions)
     else:
-        return np.argmax(Qhat)
-
-def theta(x:np.ndarray):
-    return np.exp(-(np.dot(x,INV_COV)*x).sum(axis=1)/2)
+        return np.argmax(pi)
 
 def centers_distance(s:np.ndarray):
     return s-CENTER_PRODUCTS
+
+def state_features(x:np.ndarray):
+    x = centers_distance(x)
+    return (np.exp(-(np.dot(x,INV_COV)*x).sum(axis=1)/2))
+
+def piApproximation(theta:np.ndarray,s:np.ndarray):
+    X = state_features(s)*theta
+    pi = (np.exp(X)/np.sum(np.exp(X))).sum(axis=1)
+    return pi,X
+
    
 def tiles(x:np.ndarray):
     p_min = min([abs(d[0]) for d in x])
@@ -232,19 +234,19 @@ def tiles(x:np.ndarray):
     y = [int(abs(d[0]) == p_min and abs(d[1]) == v_min) for d in x]
     return np.array(y)
 
-def QApproximation(theta:np.ndarray,w:np.ndarray):
-    return (theta*w).sum(axis=1)
+def VApproximation(s:np.ndarray,w:np.ndarray):
+    return np.dot(state_features(s),w),state_features(s)
 
 def init_weights(nA=3,seed=27021990):
     if DEBUG:
         np.random.seed(seed=seed)
-    return np.random.randn(nA,len(CENTER_PRODUCTS)) 
+    return np.random.randn(nA,len(CENTER_PRODUCTS)),np.random.randn(len(CENTER_PRODUCTS))
 
 def goal_test(s:np.ndarray):
     p,v = s
     return p >= 0.5 and v >= 0
 
-def sarsa(env,w,gamma,Lambda,alpha,actions,eps,max_step=5000,iters=0,epsilon_decay=0.99,min_eps=0.1):
+def sarsa(env,w,theta,gamma,Lambda,alpha,actions,eps,max_step=5000,iters=0,epsilon_decay=0.999,min_eps=0.1):
     steps = 0
     if DEBUG:
         print(f'Running iteration {iters} of SARSA')
@@ -253,65 +255,173 @@ def sarsa(env,w,gamma,Lambda,alpha,actions,eps,max_step=5000,iters=0,epsilon_dec
     while steps < max_step:
         episodes += 1
         s = env.reset()
-        x_s = centers_distance(s)
-        theta_s = theta(x_s)
-        Qhat = QApproximation(theta_s,w)
-        E = np.zeros((len(actions),len(theta_s)))
-        a = apply_policy(Qhat,actions,eps=eps)
+        # x_s = centers_distance(s)
+        # s_features = state_features(x_s)
+        Vhat_s,critic_features = VApproximation(s,w)
+        # E = np.zeros((len(actions),len(s_features)))
+        I = 1
+        
         done = False
         while not done:
+            pi_hat,actor_features = piApproximation(theta,s)
+            a = apply_policy(pi_hat,actions,eps=eps)
             s_tag, reward, done, _ = env.step(a)
-            x_s_tag = centers_distance(s_tag)
-            theta_s_tag = theta(x_s_tag)
-            Qhat_tag = QApproximation(theta_s_tag,w)
+            Vhat_s_tag,critic_features_tag = VApproximation(s_tag,w)
             goal = int(goal_test(s_tag))
-            a_tag = apply_policy(Qhat_tag,actions,eps=eps)
-            delta = reward - Qhat[a] + gamma*Qhat_tag[a] if not done else 0
-            E[a] += tiles(x_s)
-            w[a] += alpha*delta*E[a]*theta_s
-            E *= gamma*Lambda 
-            s, a, x_s, theta_s, Qhat = s_tag, a_tag, x_s_tag, theta_s_tag, Qhat_tag
+            a_tag = apply_policy(pi_hat,actions,eps=eps)
+            delta = reward - Vhat_s + gamma*Vhat_s_tag if not done else 0
+            # E[a] += tiles(x_s)
+            w += alpha*delta*critic_features
+            theta[a] += (alpha*0.1)*delta*I*(actor_features[a] - np.dot(pi_hat,actor_features))
+            I *= gamma
+            s, a, critic_features, Vhat_s = s_tag, a_tag, critic_features_tag, Vhat_s_tag
             steps += 1
             if steps >= max_step:
                 break
-        if goal:
-            eps *= 0.99
+        # if goal:
+        #     eps *= 0.99
         goal_reached += goal
         eps = max(min_eps,eps*epsilon_decay) 
     if DEBUG:
         print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')
     return steps,episodes,eps
-
+def AC(env,w,theta,gamma,alpha,actions,eps,max_step=5000,iters=0,epsilon_decay=0.999,min_eps=0.1,alpha_min=1e-5,alpha_init=0.01,lastV=-200):
+    steps = 0
+    if DEBUG:
+        print(f'Running iteration {iters} of Actor-Critic with alpha={alpha}')
+    goal_reached = 0
+    episodes = 0
+    # prev = abs(lastV)
+    while steps < max_step:
+        episodes += 1
+        s = env.reset()
+        Vhat_s,W_s_grad = VApproximation(s,w)
+        I = 1
+        done = False
+        episode_steps = 0
+        while not done:
+            pi_hat,actor_features = piApproximation(theta,s)
+            a = apply_policy(pi_hat,actions,eps=eps)
+            s_tag, reward, done, _ = env.step(a)
+            episode_steps += 1
+            Vhat_s_tag,W_s_tag_grad = VApproximation(s_tag,w)
+            goal = int(goal_test(s_tag))
+            a_tag = apply_policy(pi_hat,actions,eps=eps)
+            delta = reward - Vhat_s + gamma*Vhat_s_tag if not done else 0
+            # E[a] += tiles(x_s)
+            w += (alpha*3)*delta*W_s_grad
+            grad = actor_features[a] - np.dot(pi_hat,actor_features)
+            theta[a] += (alpha)*delta*I*grad
+            I *= gamma
+            s, a, W_s_grad, Vhat_s = s_tag, a_tag, W_s_tag_grad, Vhat_s_tag
+            steps += 1
+            if steps >= max_step:
+                break
+        goal_reached += goal
+        # if episode_steps/prev >  1.08:
+        #     alpha = min(alpha_init*2,alpha*5)
+        # elif episode_steps > prev  or prev == (500 if RELAXED else 200):
+        #     alpha = min(alpha_init,alpha*2)
+        # elif episode_steps < prev:
+        #     alpha = max(0.00001,alpha/2)
+        # prev = episode_steps
+        eps = max(min_eps,eps*epsilon_decay) 
+    if DEBUG:
+        print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')
+    return steps,episodes,eps,alpha
 def learn_policy(env,actions,gamma,Lambda,alpha):
     nA = len(actions)
     #best pi for return + debugging 
-    best_w = None
-    best_v0 = float('-inf')
+    best_theta = None
+    best_v0 = -200
     best_time = (0,0)
+    Vprev = best_v0#[-200 for i in range(10)]
     #init weights
-    w = init_weights(nA=nA)
+    theta,w = init_weights(nA=nA)
     x,y = [0],[MIN_V]
     total_steps = 0
     total_episodes = 0
     iters = 0
-    epsilon = 1
+    epsilon = 0.9
+    alpha_init = 0.01
+    alpha = alpha_init
+    prevMean = np.mean(Vprev)
+    dirFlag = 0
     while total_steps < MAX_STEPS:
         iters += 1
-        steps,episodes,epsilon = sarsa(env,w,gamma,Lambda,alpha,actions,epsilon,max_step=EVAL_STEPS,iters=iters)
-        v0 = evaluate(env,w,gamma,show=iters%50==0)
+        steps,episodes,epsilon,alpha = AC(env,w,theta,gamma,alpha,actions,epsilon,max_step=EVAL_STEPS,iters=iters,alpha_min=0.00001,alpha_init=0.01)
+        v0 = evaluate(env,theta,gamma,show=iters%50==0)
+        print(f'Best V is {best_v0} and ratio is {v0/best_v0}')
+        # sortedHistory = list(sorted(Vprev))
+        # if np.std(Vprev) < 3:
+        #     dirFlag = -1
+        # elif all([sortedHistory[i] == Vprev[i] for i in range(len(Vprev))]):
+        #     if v0 > Vprev[-1]:
+        #         dirFlag = 1
+        #     if v0 <= Vprev[-1] and v0 >= Vprev[0]:
+        #         dirFlag = 0
+        #     if v0 <= sortedHistory[0]:
+        #         dirFlag = -1
+        # elif np.mean(Vprev) < v0 or v0 > min(Vprev):
+        #     dirFlag = 1
+        # elif np.mean(Vprev) > v0:
+        #     dirFlag = -1
+        # else:
+        #     dirFlag = 0
+        # if iters % 10 == 0:
+        #     if dirFlag < 0:
+        #         alpha = min(alpha_init,alpha*2)
+        #     elif dirFlag > 0:
+        #         alpha = max(0.00001,alpha/2)
+        # if v0/best_v0 < 0.85:
+        #     alpha = min(0.0001,alpha)
+        # Vprev = Vprev[1:] + [v0] 
+        
+        # vmean = np.mean(Vprev)
+        # if iters%10 == 0:
+        #     alpha = (1/(-200 - vmean))**2 if vmean > -190 else 0.01
+        #     if vmean < best_v0 or np.std(Vprev) < 5:
+        #         alpha *= 2
+        #     alpha = min(alpha_init,alpha)
+        # if v0/best_v0 > 1.2:
+        #     alpha *= 4
+        # elif v0/best_v0 > 1:
+        #     alpha *= 2
+        # elif 0.8 < v0/best_v0 < 0.9:
+        #     alpha /= 2
+        # if v0/best_v0 < 0.8:
+        #     alpha /= 4
+        # if iters %10 == 0:
+        #     alpha *= 1 if prevMean >= vmean or v0 < best_v0 else 0.99
+        #     prevMean = vmean
+        #     print(np.std(Vprev))
+        #     if best_v0 > vmean and v0 < best_v0 and np.std(Vprev) < 2:
+        #         alpha = alpha_init*2
+        #     elif best_v0 > vmean and v0 < best_v0 and np.std(Vprev) < 5:
+        #         alpha = alpha_init
+        
+        if v0 > Vprev:
+            alpha *= 0.999
+        if v0 < Vprev:
+            alpha /= 0.999
+        if v0 > best_v0:
+            alpha *= 0.1
+        alpha = min(alpha_init,max(alpha,0.00001))
+        Vprev = v0
+        # alpha = max(0.00001,min((v0/-200)**30,0.002))
         total_steps += steps
         total_episodes += episodes
         if v0 >= best_v0:
             best_v0 = v0
-            best_w = w.copy()
+            best_theta = theta.copy()
             best_time = (total_steps,total_episodes)
         x.append(total_steps)
         y.append(v0)  
         if DEBUG:
             print(f'current step count is: {total_steps} with epsilon={epsilon}')    
 
-    save_run(best_w,x,y,alpha,Lambda)
-    return {'x':x,'y':y},best_w,best_v0,best_time
+    save_run(best_theta,x,y,alpha,Lambda)
+    return {'x':x,'y':y},best_theta,best_v0,best_time
 
 def main(gamma=1,human=False):
     values = {}
@@ -319,25 +429,29 @@ def main(gamma=1,human=False):
     init_covariance()
     init_intervals()
     init_centers()
+    # print(CENTER_PRODUCTS)
+    # print(P_CENTERS)
+    # print(V_CENTERS)
+    # return
     if human:
         run_simulation(env,human=True)
         return
     try:
-        with open(f'out/{"relaxed-" if RELAXED else ""}0.02-0.5-w.npy','rb') as f:
+        with open(f'out/{MAX_STEPS}-{"relaxed-" if RELAXED else ""}0.02-theta.npy','rb') as f:
             w = np.load(f)
             print('Running simulation using previous learned policy')
-            run_simulation(env,w=w)
+            run_simulation(env,theta=w)
     except:
         print('No previous learned policy found...')
     nA = env.action_space.n
     for Lambda in [0.5]:
-        for alpha in [0.02]:
+        for alpha in [0.01]:
             print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
             label = f'$\\alpha={alpha},\\lambda={Lambda}$'
-            xy,w,v0,(steps,episodes) = learn_policy(env,range(nA),gamma,Lambda,alpha)
+            xy,theta,v0,(steps,episodes) = learn_policy(env,range(nA),gamma,Lambda,alpha)
             print(f'The best policy was learned in {episodes} episodes or in {steps} steps and V(0)={v0}')
             values[label] = (xy,alpha,Lambda)
-            run_simulation(env,w=w)
+            run_simulation(env,theta=theta)
             print(f'Done running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
     print('Creating tons of plots to pick the most informative from...')
     plot_results(values)
@@ -350,8 +464,8 @@ if __name__ == "__main__":
         parser.add_argument('-human',dest='human', action='store_true',help='use this flag to run human agent')
         parser.add_argument('-gamma',dest='gamma', metavar='G',default=1.0, type=float, help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d',dest='debug', action='store_true',help='use this flag to get debug prints')
-        parser.add_argument('-ms',dest='max_steps', metavar='MAX_STEPS',default=120000, type=int, help='a int for number of maximum steps for learning.')
-        parser.add_argument('-es',dest='eval_steps', metavar='EVAL_STEPS',default=1000, type=int, help='a int for number of steps between evaluations.')
+        parser.add_argument('-ms',dest='max_steps', metavar='MAX_STEPS',default=1000000, type=int, help='a int for number of maximum steps for learning.')
+        parser.add_argument('-es',dest='eval_steps', metavar='EVAL_STEPS',default=500, type=int, help='a int for number of steps between evaluations.')
         parser.add_argument('-png',dest='png', metavar='PNG_SUFFIX',default='', help='a suffix for png out file')
         parser.add_argument('-relax',action='store_true',help='use this flag to use 500 steps episodes')
         args = parser.parse_args()
