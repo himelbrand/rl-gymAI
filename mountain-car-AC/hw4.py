@@ -124,24 +124,21 @@ def plot_results(values):
         [2000, 2000, 3000, 4000, 5000],
         [5000, 4000, 3000, 2000, 1000]
     ]
-    lambdas = powerset([0.5])
-    alphas = powerset([0.01])
     t = '_relaxed' if RELAXED else ''
     part = int(MAX_STEPS / 5) + 1
-    for (s, l, a) in product(sizes, lambdas, alphas):
+    for s in sizes:
         plt.figure(figsize=(20, 10))
         plt.title(r'Learning of policy - $V^{\pi}_{init}$ by steps')
         plt.xlabel('Total steps')
         plt.ylabel(r'$V^{\pi}_{init}$', rotation=90)
         for label in values:
-            x, y, alpha, Lambda = values[label][0]['x'], values[label][0]['y'], values[label][1], values[label][2]
-            if alpha in a and Lambda in l:
-                y = [v for i, v in enumerate(y) if x[i] % s[x[i] // part] == 0]
-                x = [step for step in x if step % s[step // part] == 0]
-                plt.plot(x, y, label=label)
-                plt.legend()
-                plt.savefig(
-                    f'out/plots/plot({datetime.strftime(datetime.now(), "%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
+            x, y = values[label]['x'], values[label]['y']
+
+            y = [v for i, v in enumerate(y) if x[i] % s[x[i] // part] == 0]
+            x = [step for step in x if step % s[step // part] == 0]
+            plt.plot(x, y, label=label)
+            plt.legend()
+            plt.savefig(f'out/plots/plot({datetime.strftime(datetime.now(), "%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
         plt.close()
 
 
@@ -270,52 +267,11 @@ def goal_test(s: np.ndarray):
     return p >= 0.5 and v >= 0
 
 
-def sarsa(env, w, theta, gamma, Lambda, alpha, actions, eps, max_step=5000, iters=0, epsilon_decay=0.999, min_eps=0.1):
+def AC(env, w, theta, gamma, alphas, actions, eps, max_step=5000, iters=0, epsilon_decay=0.999, min_eps=0.1):
     steps = 0
+    alpha_w, alpha_t = alphas
     if DEBUG:
-        print(f'Running iteration {iters} of SARSA')
-    goal_reached = 0
-    episodes = 0
-    while steps < max_step:
-        episodes += 1
-        s = env.reset()
-        # x_s = centers_distance(s)
-        # s_features = state_features(x_s)
-        Vhat_s, critic_features = VApproximation(s, w)
-        # E = np.zeros((len(actions),len(s_features)))
-        I = 1
-
-        done = False
-        while not done:
-            pi_hat, actor_features = piApproximation(theta, s)
-            a = apply_policy(pi_hat, actions, eps=eps)
-            s_tag, reward, done, _ = env.step(a)
-            Vhat_s_tag, critic_features_tag = VApproximation(s_tag, w)
-            goal = int(goal_test(s_tag))
-            a_tag = apply_policy(pi_hat, actions, eps=eps)
-            delta = reward - Vhat_s + gamma * Vhat_s_tag if not done else 0
-            # E[a] += tiles(x_s)
-            w += alpha * delta * critic_features
-            theta[a] += (alpha * 0.1) * delta * I * (actor_features[a] - np.dot(pi_hat, actor_features))
-            I *= gamma
-            s, a, critic_features, Vhat_s = s_tag, a_tag, critic_features_tag, Vhat_s_tag
-            steps += 1
-            if steps >= max_step:
-                break
-        # if goal:
-        #     eps *= 0.99
-        goal_reached += goal
-        eps = max(min_eps, eps * epsilon_decay)
-    if DEBUG:
-        print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')
-    return steps, episodes, eps
-
-
-def AC(env, w, theta, gamma, alpha, actions, eps, max_step=5000, iters=0, epsilon_decay=0.999, min_eps=0.1,
-       alpha_min=1e-5, alpha_init=0.01, lastV=-200):
-    steps = 0
-    if DEBUG:
-        print(f'Running iteration {iters} of Actor-Critic with alpha={alpha}')
+        print(f'Running iteration {iters} of Actor-Critic with alpha={alphas}')
     goal_reached = 0
     episodes = 0
     # prev = abs(lastV)
@@ -335,30 +291,22 @@ def AC(env, w, theta, gamma, alpha, actions, eps, max_step=5000, iters=0, epsilo
             goal = int(goal_test(s_tag))
             a_tag = apply_policy(pi_hat, actions, eps=eps)
             delta = reward - Vhat_s + gamma * Vhat_s_tag if not done else 0
-            # E[a] += tiles(x_s)
-            w += (alpha * 3) * delta * W_s_grad
+            w += alpha_w * delta * W_s_grad
             grad = actor_features[a] - np.dot(pi_hat, actor_features)
-            theta[a] += (alpha) * delta * I * grad
+            theta[a] += alpha_t * delta * I * grad
             I *= gamma
             s, a, W_s_grad, Vhat_s = s_tag, a_tag, W_s_tag_grad, Vhat_s_tag
             steps += 1
             if steps >= max_step:
                 break
         goal_reached += goal
-        # if episode_steps/prev >  1.08:
-        #     alpha = min(alpha_init*2,alpha*5)
-        # elif episode_steps > prev  or prev == (500 if RELAXED else 200):
-        #     alpha = min(alpha_init,alpha*2)
-        # elif episode_steps < prev:
-        #     alpha = max(0.00001,alpha/2)
-        # prev = episode_steps
         eps = max(min_eps, eps * epsilon_decay)
     if DEBUG:
         print(f'Reached goal {goal_reached}/{episodes} in episodes of this iteration')
-    return steps, episodes, eps, alpha
+    return steps, episodes, eps
 
 
-def learn_policy(env, actions, gamma, Lambda, alpha):
+def learn_policy(env, actions, gamma):
     nA = len(actions)
     # best pi for return + debugging
     best_theta = None
@@ -372,72 +320,25 @@ def learn_policy(env, actions, gamma, Lambda, alpha):
     total_episodes = 0
     iters = 0
     epsilon = 0.9
-    alpha_init = 0.01
-    alpha = alpha_init
-    prevMean = np.mean(Vprev)
-    dirFlag = 0
+    alphas_init = [0.01, 0.01]# (alpha_w,alpha_theta)
+    alphas = alphas_init.copy()
     while total_steps < MAX_STEPS:
         iters += 1
-        steps, episodes, epsilon, alpha = AC(env, w, theta, gamma, alpha, actions, epsilon, max_step=EVAL_STEPS,
-                                             iters=iters, alpha_min=0.00001, alpha_init=0.01)
+        steps, episodes, epsilon = AC(env, w, theta, gamma, alphas, actions, epsilon, max_step=EVAL_STEPS,
+                                             iters=iters)
         v0 = evaluate(env, theta, gamma, show=iters % 50 == 0)
         print(f'Best V is {best_v0} and ratio is {v0 / best_v0}')
-        # sortedHistory = list(sorted(Vprev))
-        # if np.std(Vprev) < 3:
-        #     dirFlag = -1
-        # elif all([sortedHistory[i] == Vprev[i] for i in range(len(Vprev))]):
-        #     if v0 > Vprev[-1]:
-        #         dirFlag = 1
-        #     if v0 <= Vprev[-1] and v0 >= Vprev[0]:
-        #         dirFlag = 0
-        #     if v0 <= sortedHistory[0]:
-        #         dirFlag = -1
-        # elif np.mean(Vprev) < v0 or v0 > min(Vprev):
-        #     dirFlag = 1
-        # elif np.mean(Vprev) > v0:
-        #     dirFlag = -1
-        # else:
-        #     dirFlag = 0
-        # if iters % 10 == 0:
-        #     if dirFlag < 0:
-        #         alpha = min(alpha_init,alpha*2)
-        #     elif dirFlag > 0:
-        #         alpha = max(0.00001,alpha/2)
-        # if v0/best_v0 < 0.85:
-        #     alpha = min(0.0001,alpha)
-        # Vprev = Vprev[1:] + [v0] 
-
-        # vmean = np.mean(Vprev)
-        # if iters%10 == 0:
-        #     alpha = (1/(-200 - vmean))**2 if vmean > -190 else 0.01
-        #     if vmean < best_v0 or np.std(Vprev) < 5:
-        #         alpha *= 2
-        #     alpha = min(alpha_init,alpha)
-        # if v0/best_v0 > 1.2:
-        #     alpha *= 4
-        # elif v0/best_v0 > 1:
-        #     alpha *= 2
-        # elif 0.8 < v0/best_v0 < 0.9:
-        #     alpha /= 2
-        # if v0/best_v0 < 0.8:
-        #     alpha /= 4
-        # if iters %10 == 0:
-        #     alpha *= 1 if prevMean >= vmean or v0 < best_v0 else 0.99
-        #     prevMean = vmean
-        #     print(np.std(Vprev))
-        #     if best_v0 > vmean and v0 < best_v0 and np.std(Vprev) < 2:
-        #         alpha = alpha_init*2
-        #     elif best_v0 > vmean and v0 < best_v0 and np.std(Vprev) < 5:
-        #         alpha = alpha_init
-
-        if v0 > Vprev:
-            alpha *= 0.999
-        if v0 < Vprev:
-            alpha /= 0.999
-        if v0 > best_v0:
-            alpha *= 0.1
-        alpha = min(alpha_init, max(alpha, 0.00001))
-        Vprev = v0
+        test_arr = np.array(y[-5:])
+        count = np.count_nonzero(v0 > test_arr)
+        flag = count > len(test_arr)/2
+        if flag:
+            alphas[1] *= 0.999
+        else:
+            alphas[1] /= 0.999
+        ratio = v0/best_v0
+        if v0/best_v0 < 1:
+            alphas[1] *= ratio**2
+        alphas[1] = min(alphas_init[1], max(alphas[1], 0.00001))
         # alpha = max(0.00001,min((v0/-200)**30,0.002))
         total_steps += steps
         total_episodes += episodes
@@ -475,15 +376,14 @@ def main(gamma=1, human=False):
     except:
         print('No previous learned policy found...')
     nA = env.action_space.n
-    for Lambda in [0.5]:
-        for alpha in [0.01]:
-            print(f'Learning policy using lambda={Lambda} and alpha={alpha}')
-            label = f'$\\alpha={alpha},\\lambda={Lambda}$'
-            xy, theta, v0, (steps, episodes) = learn_policy(env, range(nA), gamma, Lambda, alpha)
-            print(f'The best policy was learned in {episodes} episodes or in {steps} steps and V(0)={v0}')
-            values[label] = (xy, alpha, Lambda)
-            run_simulation(env, theta=theta)
-            print(f'Done running a single simulation using learned policy with lambda={Lambda} and alpha={alpha}')
+
+    print(f'Learning policy using AC')
+    label = "label temp"
+    xy, theta, v0, (steps, episodes) = learn_policy(env, range(nA), gamma)
+    print(f'The best policy was learned in {episodes} episodes or in {steps} steps and V(0)={v0}')
+    values[label] = xy
+    run_simulation(env, theta=theta)
+    print(f'Done running a single simulation using learned policy')
     print('Creating tons of plots to pick the most informative from...')
     plot_results(values)
     print('All possible plots can be now found in out directory!')
@@ -499,7 +399,7 @@ if __name__ == "__main__":
         parser.add_argument('-gamma', dest='gamma', metavar='G', default=1.0, type=float,
                             help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d', dest='debug', action='store_true', help='use this flag to get debug prints')
-        parser.add_argument('-ms', dest='max_steps', metavar='MAX_STEPS', default=1000000, type=int,
+        parser.add_argument('-ms', dest='max_steps', metavar='MAX_STEPS', default=200000, type=int,
                             help='a int for number of maximum steps for learning.')
         parser.add_argument('-es', dest='eval_steps', metavar='EVAL_STEPS', default=500, type=int,
                             help='a int for number of steps between evaluations.')
