@@ -1,9 +1,7 @@
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
-import pprint
 from datetime import datetime
-from collections import defaultdict
 from itertools import product
 
 DEBUG = False
@@ -11,8 +9,8 @@ MAX_STEPS = 120000
 EVAL_STEPS = 1000
 RELAXED = False
 png_suffix = ''
-P_CENTERS = [(i) * 0.18 for i in range(-4, 4)]
-V_CENTERS = [(i) * 0.014 for i in range(-4, 4)]
+P_CENTERS = [i * 0.18 for i in range(-4, 4)]
+V_CENTERS = [i * 0.014 for i in range(-4, 4)]
 P_I = 0.18
 V_I = 0.014
 CENTER_PRODUCTS = np.array(list(product(P_CENTERS, V_CENTERS)))
@@ -73,7 +71,7 @@ def init_intervals(Ip=0.18, Iv=0.014):
 def init_centers(p_half=4, v_half=4):
     global P_CENTERS, V_CENTERS, CENTER_PRODUCTS
     P_CENTERS = [(i + 0.5) * P_I for i in range(-p_half, p_half)]
-    V_CENTERS = [(i) * V_I for i in range(-v_half, v_half)]
+    V_CENTERS = [i * V_I for i in range(-v_half, v_half)]
     CENTER_PRODUCTS = np.array(list(product(P_CENTERS, V_CENTERS)))
 
 
@@ -103,13 +101,6 @@ def save_run(w, x, y, alpha):
 
 
 def plot_results(values):
-    def powerset(s):
-        res = []
-        x = len(s)
-        for i in range(1 << x):
-            res.append([s[j] for j in range(x) if (i & (1 << j))])
-        return res
-
     sizes = [
         [500] * 5,
         [1000] * 5,
@@ -134,13 +125,12 @@ def plot_results(values):
             y = [v for i, v in enumerate(y) if x[i] % s[x[i] // part] == 0]
             x = [step for step in x if step % s[step // part] == 0]
             plt.plot(x, y, label=label)
-            # plt.legend()
             plt.savefig(
                 f'out/plots/plot({datetime.strftime(datetime.now(), "%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
         plt.close()
 
 
-def human_agent(env):
+def human_agent():
     from readchar import readkey
     left_arrow = '\x1b[D'
     right_arrow = '\x1b[C'
@@ -243,13 +233,6 @@ def piApproximation(theta: np.ndarray, s: np.ndarray):
     return pi, X
 
 
-def tiles(x: np.ndarray):
-    p_min = min([abs(d[0]) for d in x])
-    v_min = min([abs(d[1]) for d in x])
-    y = [int(abs(d[0]) == p_min and abs(d[1]) == v_min) for d in x]
-    return np.array(y)
-
-
 def VApproximation(s: np.ndarray, w: np.ndarray):
     return np.dot(state_features(s), w), state_features(s)
 
@@ -272,7 +255,6 @@ def AC(env, w, theta, gamma, alphas, actions, eps, max_step=5000, iters=0, epsil
         print(f'Running iteration {iters} of Actor-Critic with alpha={alphas}')
     goal_reached = 0
     episodes = 0
-    # prev = abs(lastV)
     while steps < max_step:
         episodes += 1
         s = env.reset()
@@ -306,19 +288,17 @@ def AC(env, w, theta, gamma, alphas, actions, eps, max_step=5000, iters=0, epsil
 
 def learn_policy(env, actions, gamma):
     nA = len(actions)
-    # best pi for return + debugging
+    # best theta for return + debugging
     best_theta = None
     best_v0 = -200
     best_time = (0, 0)
-    Vprev = best_v0  # [-200 for i in range(10)]
-    # init weights
     theta, w = init_weights(nA=nA)
     x, y = [0], [MIN_V]
     total_steps = 0
     total_episodes = 0
     iters = 0
     epsilon = 0.5
-    alphas_init = [0.02, 0.01]# (alpha_w,alpha_theta)
+    alphas_init = [0.02, 0.01]
     alphas = alphas_init.copy()
     while total_steps < MAX_STEPS:
         iters += 1
@@ -326,24 +306,15 @@ def learn_policy(env, actions, gamma):
                                              iters=iters)
         v0 = evaluate(env, theta, gamma, show=iters % 50 == 0)
         print(f'Best V is {best_v0} and ratio is {v0 / best_v0}')
-        test_arr = np.array(y[-5:])
-        count = np.count_nonzero(v0 > test_arr)
-        flag = count > len(test_arr)/2
         if iters % 3 == 0:
             alphas[0] *= 0.9999
             alphas[1] *= 0.9999
-
-            # if flag:
-            #     alphas[1] *= 0.999
-            # else:
-            #     alphas[1] /= 0.999
         ratio = v0/best_v0
         if v0/best_v0 < 1:
             alphas[1] *= ratio ** 3
             alphas[0] *= ratio ** 2
         alphas[1] = min(alphas_init[1], max(alphas[1], 0.00001))
         alphas[0] = min(alphas_init[0], max(alphas[0], 0.0001))
-        # alpha = max(0.00001,min((v0/-200)**30,0.002))
         total_steps += steps
         total_episodes += episodes
         if v0 >= best_v0:
@@ -355,7 +326,7 @@ def learn_policy(env, actions, gamma):
         if DEBUG:
             print(f'current step count is: {total_steps} with epsilon={epsilon}')
 
-    save_run(best_theta, x, y, alphas)
+    save_run(best_theta, x, y, alphas_init)
     return {'x': x, 'y': y}, best_theta, best_v0, best_time
 
 
@@ -365,15 +336,11 @@ def main(gamma=1, human=False):
     init_covariance()
     init_intervals()
     init_centers()
-    # print(CENTER_PRODUCTS)
-    # print(P_CENTERS)
-    # print(V_CENTERS)
-    # return
     if human:
         run_simulation(env, human=True)
         return
     try:
-        with open(f'out/{MAX_STEPS}-{"relaxed-" if RELAXED else ""}0.02-theta.npy', 'rb') as f:
+        with open(f'out/{MAX_STEPS}-{"relaxed-" if RELAXED else ""}[0.02, 0.01]-theta.npy', 'rb') as f:
             w = np.load(f)
             print('Running simulation using previous learned policy')
             run_simulation(env, theta=w)
@@ -395,13 +362,11 @@ def main(gamma=1, human=False):
 
 if __name__ == "__main__":
     import argparse
-
-
     def parse_args():
         parser = argparse.ArgumentParser(prog='hw4.py', description='Actor - Critic for AI-Gym Mountain Car.')
         parser.add_argument('-human', dest='human', action='store_true', help='use this flag to run human agent')
         parser.add_argument('-gamma', dest='gamma', metavar='G', default=1.0, type=float,
-                            help='a float for gamma in [0,1] (default: 0.95).')
+                            help='a float for gamma in [0,1] (default: 1.0).')
         parser.add_argument('-d', dest='debug', action='store_true', help='use this flag to get debug prints')
         parser.add_argument('-ms', dest='max_steps', metavar='MAX_STEPS', default=150000, type=int,
                             help='a int for number of maximum steps for learning.')
@@ -418,7 +383,6 @@ if __name__ == "__main__":
         set_relaxed(args.relax)
         set_png_suffix(args.png)
         return args
-
 
     args = parse_args()
     main(gamma=args.gamma, human=args.human)
