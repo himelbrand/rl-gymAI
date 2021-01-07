@@ -89,7 +89,7 @@ def modify_env(env):
     return env
 
 
-def save_run(w, x, y, alpha, Lambda):
+def save_run(w, x, y, alpha):
     t = 'relaxed-' if RELAXED else ''
     try:
         with open(f'out/{MAX_STEPS}-{t}{alpha}-x.npy', 'wb') as f:
@@ -111,18 +111,15 @@ def plot_results(values):
         return res
 
     sizes = [
+        [500] * 5,
         [1000] * 5,
         [2000] * 5,
-        [3000] * 5,
-        [4000] * 5,
-        [5000] * 5,
-        [2000, 3000, 4000, 5000, 5000],
         [1000, 2000, 3000, 4000, 5000],
         [1000, 1000, 2000, 3000, 4000],
         [1000, 1000, 2000, 2000, 3000],
         [1000, 1000, 2000, 3000, 4000],
-        [2000, 2000, 3000, 4000, 5000],
-        [5000, 4000, 3000, 2000, 1000]
+        [5000, 4000, 3000, 2000, 1000],
+        [3000, 2000, 1000, 1000, 500]
     ]
     t = '_relaxed' if RELAXED else ''
     part = int(MAX_STEPS / 5) + 1
@@ -137,8 +134,9 @@ def plot_results(values):
             y = [v for i, v in enumerate(y) if x[i] % s[x[i] // part] == 0]
             x = [step for step in x if step % s[step // part] == 0]
             plt.plot(x, y, label=label)
-            plt.legend()
-            plt.savefig(f'out/plots/plot({datetime.strftime(datetime.now(), "%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
+            # plt.legend()
+            plt.savefig(
+                f'out/plots/plot({datetime.strftime(datetime.now(), "%d-%m_%H-%M")}){t}_{"-".join([str(n) for n in s])}{png_suffix}.png')
         plt.close()
 
 
@@ -351,7 +349,7 @@ def learn_policy(env, actions, gamma):
         if DEBUG:
             print(f'current step count is: {total_steps} with epsilon={epsilon}')
 
-    save_run(best_theta, x, y, alpha, Lambda)
+    save_run(best_theta, x, y, alphas)
     return {'x': x, 'y': y}, best_theta, best_v0, best_time
 
 
@@ -399,7 +397,7 @@ if __name__ == "__main__":
         parser.add_argument('-gamma', dest='gamma', metavar='G', default=1.0, type=float,
                             help='a float for gamma in [0,1] (default: 0.95).')
         parser.add_argument('-d', dest='debug', action='store_true', help='use this flag to get debug prints')
-        parser.add_argument('-ms', dest='max_steps', metavar='MAX_STEPS', default=200000, type=int,
+        parser.add_argument('-ms', dest='max_steps', metavar='MAX_STEPS', default=150000, type=int,
                             help='a int for number of maximum steps for learning.')
         parser.add_argument('-es', dest='eval_steps', metavar='EVAL_STEPS', default=500, type=int,
                             help='a int for number of steps between evaluations.')
