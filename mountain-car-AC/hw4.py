@@ -317,8 +317,8 @@ def learn_policy(env, actions, gamma):
     total_steps = 0
     total_episodes = 0
     iters = 0
-    epsilon = 0.9
-    alphas_init = [0.01, 0.01]# (alpha_w,alpha_theta)
+    epsilon = 0.5
+    alphas_init = [0.02, 0.01]# (alpha_w,alpha_theta)
     alphas = alphas_init.copy()
     while total_steps < MAX_STEPS:
         iters += 1
@@ -329,14 +329,20 @@ def learn_policy(env, actions, gamma):
         test_arr = np.array(y[-5:])
         count = np.count_nonzero(v0 > test_arr)
         flag = count > len(test_arr)/2
-        if flag:
-            alphas[1] *= 0.999
-        else:
-            alphas[1] /= 0.999
+        if iters % 3 == 0:
+            alphas[0] *= 0.9999
+            alphas[1] *= 0.9999
+
+            # if flag:
+            #     alphas[1] *= 0.999
+            # else:
+            #     alphas[1] /= 0.999
         ratio = v0/best_v0
         if v0/best_v0 < 1:
-            alphas[1] *= ratio**2
+            alphas[1] *= ratio ** 3
+            alphas[0] *= ratio ** 2
         alphas[1] = min(alphas_init[1], max(alphas[1], 0.00001))
+        alphas[0] = min(alphas_init[0], max(alphas[0], 0.0001))
         # alpha = max(0.00001,min((v0/-200)**30,0.002))
         total_steps += steps
         total_episodes += episodes
